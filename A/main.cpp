@@ -2,9 +2,10 @@
 
 template<class T> inline bool chmax(T& a, T b) { if (a < b) { a = b; return 1; } return 0; }
 template<class T> inline bool chmin(T& a, T b) { if (a > b) { a = b; return 1; } return 0; }
-const int dr[4] = {1, 0, -1, 0};
-const int dc[4] = {0, 1, 0, -1};
+const int dr[] = {1, 0, -1, 0};
+const int dc[] = {0, 1, 0, -1};
 
+using ll = long long;
 using std::cout;
 using std::endl;
 struct Vegetable
@@ -59,8 +60,7 @@ struct Game {
     std::vector<std::vector<int>> has_machine;
     std::vector<std::vector<int>> vege_values;
     std::vector<std::vector<int>> done;
-    std::vector<std::vector<int>> use_load;
-    std::vector<std::vector<int>> value;
+    std::vector<std::vector<std::tuple<int, int, int>>> connected_values;
     int num_machine;
     int next_price;
     int money;
@@ -69,9 +69,7 @@ struct Game {
     {
         has_machine.assign(N, std::vector<int>(N, 0));
         vege_values.assign(N, std::vector<int>(N, 0));
-        done.assign(N, std::vector<int>(N, 0));
-        value.assign(N, std::vector<int>(N, 0));
-        use_load.assign(N, std::vector<int>(N, 0));
+        done.assign(N, std::vector<int>(N));
     }
 
     void purchase(int r, int c)
@@ -158,115 +156,170 @@ struct Game {
 
     Action select_next_action(int day)
     {
-      bool ispurchase = (day < 500 and money >= next_price);
-      if(road.empty())
+      const bool ispurchace = (day < 500 and money >= next_price);
       {
-        std::sort(untreated.rbegin(), untreated.rend());
-        while(not untreated.empty() and vege_values[untreated.back().r][untreated.back().c] == 0)
-          untreated.pop_back();
-        if(untreated.empty())
+        int id = 1;
+        int val = 0;
+        int cnt = 0;
+        std::vector<std::pair<int, int>> vp;
+        done.assign(N, std::vector<int>(N));
+        connected_values.assign(N, std::vector<std::tuple<int, int, int>>(N));
+        auto dfs = [&](auto &&self, int r, int c)->void
         {
-          return Action::pass();
-        }
-        const int cnt = std::min({machine_count + ispurchase, 10, T - day});
-        for (int i = std::max(0, day - 10); i < day + cnt; ++i)
-        {
-          for (const auto &vege : veges_start[i])
+          cnt += 1;
+          val += vege_values[r][c];
+          vp.emplace_back(r, c);
+          done[r][c] = true;
+          for (int i = 0; i < 4; ++i)
           {
-            if(vege.e >= day + cnt - 1 and ((i < day and vege_values[vege.r][vege.c] > 0) or i >= day))
+            const int nr = r + dr[i];
+            const int nc = c + dc[i];
+            if(nr < 0 or nr >= N or nc < 0 or nc >= N)
+              continue;
+            if(done[nr][nc])
+              continue;
+            if(not has_machine[nr][nc])
+              continue;
+            self(self, nr, nc);
+          }
+        };
+        for (int i = 0; i < N; ++i)
+        {
+          for (int j = 0; j < N; ++j)
+          {
+            if(done[i][j])
+              continue;
+            val = 0;
+            cnt = 0;
+            vp.clear();
+            if(not has_machine[i][j])
+              continue;
+            dfs(dfs, i, j);
+            for (const auto &[r, c] : vp)
             {
-              value[vege.r][vege.c] = vege.v;
+              connected_values[r][c] = std::make_tuple(val, cnt, id);
             }
+            id += 1;
           }
         }
+        if(ispurchace)
         {
-          use_load.assign(N, std::vector<int>(N));
-          std::vector<std::pair<int, int>> vp;
-          int max = 0;
-          road.clear();
-          auto dfs = [&](auto &&self, int r, int c, int val, std::vector<std::pair<int, int>> &vp)
+          ll max = 0;
+          int fr = -1, fc = -1;
+          for (int r = 0; r < N; ++r)
           {
-            done[r][c] = true;
-            vp.emplace_back(r, c);
-            val += value[r][c];
-            if((int)vp.size() == cnt)
+            for (int c = 0; c < N; ++c)
             {
-              if(chmax(max, val))
+              if(has_machine[r][c])
+                continue;
+              for (int k = 0; k < 4; ++k)
               {
-                road = vp;
+                const int nr = r + dr[k];
+                const int nc = c + dc[k];
+                if(nr < 0 or nr >= N or nc < 0 or nc >= N)
+                  continue;
+                const auto &[val, cnt, id] = connected_values[nr][nc];
+                const ll nxt = 1LL * (val + vege_values[r][c]) * (cnt + 1) * (cnt + 1);
+                const ll cur = 1LL * val * cnt * cnt;
+                if(chmax(max, nxt - cur))
+                {
+                  fr = r, fc = c;
+                }
               }
-              done[r][c] = false;
-              vp.pop_back();
-              val -= value[r][c];
-              return;
             }
-            for (int i = 0; i < 4; ++i)
-            {
-              const int nr = r + dr[i];
-              const int nc = c + dc[i];
-              if(nr < 0 or nr >= N or nc < 0 or nc >= N)
-                continue;
-              if(done[nr][nc])
-                continue;
-              self(self, nr, nc, val, vp);
-            }
-            done[r][c] = false;
-            vp.pop_back();
-            val -= value[r][c];
-          };
+          }
+          return Action::purchase(fr, fc);
+        }
+        else
+        {
+          int fr = -1, fc = -1, fi = -1, fj = -1;
+          ll max = 0;
 
           for (int i = 0; i < N; ++i)
           {
             for (int j = 0; j < N; ++j)
             {
-              dfs(dfs, i, j, 0, vp);
+              if(not has_machine[i][j])
+                continue;
+              bool ok = true;
+              int cnt = 0;
+              for (int k = 0; k < 4; ++k)
+              {
+                const int nr = i + dr[k];
+                const int nc = j + dc[k];
+                if(nr < 0 or nr >= N or nc < 0 or nc >= N)
+                  continue;
+                if(has_machine[nr][nc])
+                {
+                  cnt += 1;
+                  bool f = false;
+                  for (int l = 0; l < 4; ++l)
+                  {
+                    const int nnr = nr + dr[l];
+                    const int nnc = nc + dc[l];
+                    if(nnr < 0 or nnr >= N or nnc < 0 or nnc >= N)
+                      continue;
+                    if(nnr == i and nnc == j)
+                      continue;
+                    if(has_machine[nnr][nnc])
+                    {
+                      f = true;
+                      break;
+                    }
+                  }
+                  if(not f)
+                    ok = false;
+                }
+              }
+              ok |= (cnt == 1 or cnt == 0);
+              if(ok)
+              {
+                const auto &[cval, ccnt, cid] = connected_values[i][j];
+                for (int r = 0; r < N; ++r)
+                {
+                  for (int c = 0; c < N; ++c)
+                  {
+                    if(has_machine[r][c])
+                      continue;
+                    for (int k = 0; k < 4; ++k)
+                    {
+                      const int nr = r + dr[k];
+                      const int nc = c + dc[k];
+                      if(nr < 0 or nr >= N or nc < 0 or nc >= N)
+                        continue;
+                      const auto &[val, cnt, id] = connected_values[nr][nc];
+                      if(id == std::get<2>(connected_values[i][j]))
+                      {
+                        const ll nxt = 1LL * (val + vege_values[r][c] - vege_values[i][j]) * cnt;
+                        const ll cur = 1LL * val * cnt;
+                        if(chmax(max, nxt - cur))
+                        {
+                          fi = i, fj = j;
+                          fr = r, fc = c;
+                        }
+                      }
+                      else
+                      {
+                        const ll nxt = 1LL * (val + vege_values[r][c]) * (cnt + 1) + 1LL * (cval - vege_values[i][j]) * (ccnt - 1);
+                        const ll cur = 1LL * val * cnt * cnt + 1LL * cval * cnt;
+                        if(chmax(max, nxt - cur))
+                        {
+                          fi = i, fj = j;
+                          fr = r, fc = c;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
-          for (const auto &[r, c] : road)
-          {
-            use_load[r][c] = true;
-          }
-        }
-        std::sort(road.begin(), road.end(), [&](auto i, auto j)
-        {
-          return value[i.first][i.second] > value[j.first][j.second];
-        });
-        for (int i = std::max(0, day - 10); i < day + cnt; ++i)
-        {
-          for (const auto &vege : veges_start[i])
-          {
-            value[vege.r][vege.c] = 0;
-          }
+          if(fi == -1)
+            return Action::pass();
+          else
+            return Action::move(fi, fj, fr, fc);
         }
       }
-      if(not road.empty())
-      {
-        const auto [r, c] = road.back();
-        road.pop_back();
-        if(has_machine[r][c])
-        {
-          return Action::pass();
-        }
-        if(ispurchase)
-        {
-          machine_count += 1;
-          return Action::purchase(r, c);
-        }
-        for (int i = 0; i < N; ++i)
-        {
-          for (int j = 0; j < N; ++j)
-          {
-            if(use_load[i][j])
-              continue;
-            if(has_machine[i][j])
-            {
-              return Action::move(i, j, r, c);
-            }
-          }
-        };
-        return Action::pass();
-      }
-      return Action::pass();
     }
 };
 
