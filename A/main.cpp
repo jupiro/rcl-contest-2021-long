@@ -9,6 +9,14 @@ const int inf = (int)1e9 + 7;
 using ll = long long;
 using std::cout;
 using std::endl;
+
+uint32_t xor64(void)
+{
+  static uint64_t x = 88172645463325252ULL;
+  x = x ^ (x << 13); x = x ^ (x >> 7);
+  return x = x ^ (x << 17);
+}
+
 struct Vegetable
 {
     int r, c, s, e, v;
@@ -166,7 +174,7 @@ struct Game {
     {
       if(untreated.empty())
         return Action::pass();
-      const bool ispurchace = (day < 800 and money >= next_price);
+      const bool ispurchace = (day < 850 and money >= next_price);
       if((machine_count + ispurchace) >= 2 and road.empty())
       {
         std::queue<std::pair<int, int>> q;
@@ -187,7 +195,7 @@ struct Game {
         }
         int max = 0;
         int d_min = inf;
-        const int len_max = std::max(5, machine_count);
+        const int len_max = 6;
         while(not q.empty())
         {
           const auto [r, c] = q.front();
@@ -314,7 +322,7 @@ struct Game {
           return Action::pass();
         }
         int min = inf;
-        int fr = -1, fc = -1;
+        std::vector<std::pair<int, int>> frc;
         for (const auto &[r, c] : pos)
         {
           const auto &[tr, tc] = road.back();
@@ -347,11 +355,20 @@ struct Game {
           has_machine[r][c] = true;
           if(cnt == machine_count and chmin(min, vege_values[r][c]))
           {
-            fr = r, fc = c;
+            frc.clear();
+            frc.emplace_back(r, c);
+          }
+          else if(cnt == machine_count and min == vege_values[r][c])
+          {
+            frc.emplace_back(r, c);
           }
         }
-        if(fr == -1)
-          assert(false);
+        if(frc.empty())
+        {
+          return Action::pass();
+        }
+        const int idx = xor64() % (int)frc.size();
+        const auto &[fr, fc] = frc[idx];
         const auto ret = Action::move(fr, fc, road.back().first, road.back().second);
         pos.erase(std::find(pos.begin(), pos.end(), std::make_pair(fr, fc)));
         pos.emplace_back(road.back());
