@@ -73,9 +73,9 @@ struct Game
     std::vector<std::vector<int>> back;
     std::vector<std::pair<int, int>> road;
     std::vector<std::pair<int, int>> pos;
-    std::vector<std::vector<std::tuple<int, int, int>>> connected_values;
+    std::vector<std::vector<int>> ord, low;
     std::pair<int, int> destination;
-    std::vector<std::pair<int, int>> articulation;
+    std::vector<std::pair<int, int>> not_articulation;
     std::queue<std::pair<int, int>> q;
     int num_machine;
     int next_price;
@@ -87,6 +87,8 @@ struct Game
         vege_values.assign(N, std::vector<int>(N, 0));
         deadline.assign(N, std::vector<int>(N));
         dist.assign(N, std::vector<int>(N));
+        ord.assign(N, std::vector<int>(N, inf));
+        low.assign(N, std::vector<int>(N, inf));
         destination = {-1, -1};
     }
 
@@ -152,29 +154,6 @@ struct Game
         }
     }
 
-    int count_connected_machines(int r, int c)
-    {
-        std::vector<std::pair<int, int>> queue = {{r, c}};
-        std::vector<std::vector<int>> visited(N, std::vector<int>(N, 0));
-        visited[r][c] = 1;
-        int i = 0;
-        while (i < (int)queue.size()) {
-            int cr = queue[i].first;
-            int cc = queue[i].second;
-            for (int dir = 0; dir < 4; dir++)
-            {
-                int nr = cr + dr[dir];
-                int nc = cc + dc[dir];
-                if (0 <= nr && nr < N && 0 <= nc && nc < N && has_machine[nr][nc] && !visited[nr][nc])
-                {
-                    visited[nr][nc] = 1;
-                    queue.push_back({nr, nc});
-                }
-            }
-            i++;
-        }
-        return i;
-    }
     void bfs(const int len_max)
     {
       dist.assign(N, std::vector<int>(N, inf));
@@ -250,49 +229,60 @@ struct Game
       }
     }
 
-    void search_articulation(std::vector<std::pair<int, int>> &articulation)
+    void search_not_articulation(const int fr, const int fc, std::vector<std::pair<int, int>> &pos, std::vector<std::pair<int, int>> &not_articulation)
     {
-      articulation.clear();
-      int min_vege_values = inf;
-      for (const auto &[r, c] : pos)
+      not_articulation.clear();
+      int idx = 0;
+      auto dfs = [&](auto &&self, int r, int c, int pr, int pc)->void
       {
-        const auto &[tr, tc] = road.back();
-        has_machine[tr][tc] = true;
-        has_machine[r][c] = false;
-        std::vector<std::vector<bool>> done(N, std::vector<bool>(N));
-        std::queue<std::pair<int, int>> q;
-        q.emplace(tr, tc);
-        done[tr][tc] = true;
-        int cnt = 1;
-        while(not q.empty())
+        ord[r][c] = low[r][c] = idx;
+        idx += 1;
+        bool is_articulation = false;
+        for (int i = 0; i < 4; ++i)
         {
-          const auto [r, c] = q.front();
-          q.pop();
-          for (int i = 0; i < 4; ++i)
+          const int nr = r + dr[i];
+          const int nc = c + dc[i];
+          if(nr < 0 or nr >= N or nc < 0 or nc >= N)
+            continue;
+          if(nr == pr and nc == pc)
+            continue;
+          if(not (has_machine[nr][nc] or (nr == fr and nc == fc)))
+            continue;
+          if(ord[nr][nc] == inf)
           {
-            const int nr = r + dr[i];
-            const int nc = c + dc[i];
-            if(nr < 0 or nr >= N or nc < 0 or nc >= N)
-              continue;
-            if(has_machine[nr][nc] and not done[nr][nc])
+            self(self, nr, nc, r, c);
+            if(pr >= 0 and low[nr][nc] >= ord[r][c])
             {
-              done[nr][nc] = true;
-              q.emplace(nr, nc);
-              cnt += 1;
+              is_articulation = true;
             }
+            chmin(low[r][c], low[nr][nc]);
+          }
+          else
+          {
+            chmin(low[r][c], ord[nr][nc]);
           }
         }
-        has_machine[tr][tc] = false;
-        has_machine[r][c] = true;
-        if(cnt == machine_count and chmin(min_vege_values, vege_values[r][c]))
-        {
-          articulation.clear();
-          articulation.emplace_back(r, c);
-        }
-        else if(cnt == machine_count and min_vege_values == vege_values[r][c])
-        {
-          articulation.emplace_back(r, c);
-        }
+        if((not is_articulation) and pr >= 0)
+          not_articulation.emplace_back(r, c);
+      };
+      dfs(dfs, fr, fc, -1, -1);
+      ord[fr][fc] = low[fr][fc] = inf;
+      for (const auto &[r, c] : pos)
+      {
+        ord[r][c] = low[r][c] = inf;
+      }
+      int min_vege_values = inf;
+      for (const auto &[r, c] : not_articulation)
+      {
+        chmin(min_vege_values, vege_values[r][c]);
+      }
+      for (auto itr = not_articulation.begin(); itr != not_articulation.end();)
+      {
+        const auto &[r, c] = *itr;
+        if(min_vege_values == vege_values[r][c])
+          itr++;
+        else
+          itr = not_articulation.erase(itr);
       }
     }
     Action select_next_action(int day)
@@ -308,7 +298,6 @@ struct Game
         if(destination.first == -1)
           return Action::pass();
         construct_road();
-
       }
       if(ispurchace)
       {
@@ -368,13 +357,13 @@ struct Game
         {
           return Action::pass();
         }
-        search_articulation(articulation);
-        if(articulation.empty())
+        search_not_articulation(road.back().first, road.back().second, pos, not_articulation);
+        if(not_articulation.empty())
         {
           return Action::pass();
         }
-        const int idx = xor64() % (int)articulation.size();
-        const auto &[fr, fc] = articulation[idx];
+        const int idx = xor64() % (int)not_articulation.size();
+        const auto &[fr, fc] = not_articulation[idx];
         const auto ret = Action::move(fr, fc, road.back().first, road.back().second);
         road.pop_back();
         return ret;
