@@ -219,24 +219,24 @@ struct Game {
         {
           if(vege_values[r][c] > 0 and deadline[r][c] >= day + dist[r][c])
           {
-            if(chmax(max_vege_value, vege_values[r][c]))
+            if(dist[r][c] > 0 and chmax(max_vege_value, vege_values[r][c] / dist[r][c]))
               destination = {r, c};
           }
         }
       }
-      for (int r = 0; r < N; ++r)
-      {
-        for (int c = 0; c < N; ++c)
-        {
-          if(vege_values[r][c] > 0 and deadline[r][c] >= day + dist[r][c])
-          {
-            if(max_vege_value * 0.9 <= vege_values[r][c] and deadline[r][c] - day - dist[r][c] <= 1)
-            {
-              destination = {r, c};
-            }
-          }
-        }
-      }
+      // for (int r = 0; r < N; ++r)
+      // {
+      //   for (int c = 0; c < N; ++c)
+      //   {
+      //     if(vege_values[r][c] > 0 and deadline[r][c] >= day + dist[r][c])
+      //     {
+      //       if(max_vege_value * 0.9 <= vege_values[r][c] and deadline[r][c] - day - dist[r][c] <= 1)
+      //       {
+      //         destination = {r, c};
+      //       }
+      //     }
+      //   }
+      // }
     }
     void construct_road()
     {
@@ -254,10 +254,10 @@ struct Game {
     {
       if(untreated.empty())
         return Action::pass();
-      const bool ispurchace = (day < 850 and money >= next_price);
+      const bool ispurchace = (day < 840 and money >= next_price);
       if((machine_count + ispurchace) >= 2 and road.empty())
       {
-        const int len_max = 4;
+        const int len_max = 7;
         bfs(len_max);
         calc_destination(day);
         if(destination.first == -1)
