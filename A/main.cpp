@@ -63,7 +63,6 @@ int N, M, T;
 std::vector<std::vector<Vegetable>> veges_start; // veges_start[i] : vegetables appear on day i
 std::vector<std::vector<Vegetable>> veges_end;   // veges_end[i] : vegetables disappear on day i
 int machine_count = 0;
-std::vector<Vegetable> untreated;
 struct Game
 {
     std::vector<std::vector<int>> has_machine;
@@ -120,7 +119,6 @@ struct Game
       // appear
       for (const Vegetable& vege : veges_start[day])
       {
-          untreated.emplace_back(vege);
           deadline[vege.r][vege.c] = vege.e;
           vege_values[vege.r][vege.c] = vege.v;
       }
@@ -287,8 +285,6 @@ struct Game
     }
     Action select_next_action(int day)
     {
-      if(untreated.empty())
-        return Action::pass();
       const bool ispurchace = (day < 840 and money >= next_price);
       if((machine_count + ispurchace) >= 2 and road.empty())
       {
@@ -304,7 +300,7 @@ struct Game
         machine_count += 1;
         if(machine_count == 1)
         {
-          int fi = -1, fj = -1;
+          int fi = 0, fj = 0;
           int max = 0;
           for (int i = 0; i < N; ++i)
           {
