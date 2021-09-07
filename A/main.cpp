@@ -74,6 +74,7 @@ struct Game {
     std::vector<std::pair<int, int>> pos;
     std::vector<std::vector<std::tuple<int, int, int>>> connected_values;
     std::pair<int, int> destination;
+    std::queue<std::pair<int, int>> q;
     int num_machine;
     int next_price;
     int money;
@@ -95,6 +96,8 @@ struct Game {
         money -= next_price;
         num_machine++;
         next_price = (num_machine + 1) * (num_machine + 1) * (num_machine + 1);
+
+        pos.emplace_back(r, c);
     }
 
     void move(int r1, int c1, int r2, int c2)
@@ -103,6 +106,9 @@ struct Game {
         has_machine[r1][c1] = 0;
         assert(!has_machine[r2][c2]);
         has_machine[r2][c2] = 1;
+
+        auto itr = std::find(pos.begin(), pos.end(), std::make_pair(r1, c1));
+        *itr = {r2, c2};
     }
 
     void appear(const int day)
@@ -169,7 +175,81 @@ struct Game {
         }
         return i;
     }
+    void bfs(const int len_max)
+    {
+      dist.assign(N, std::vector<int>(N, inf));
+      back.assign(N, std::vector<int>(N, -1));
+      for (const auto &[r, c] : pos)
+      {
+        q.emplace(r, c);
+        dist[r][c] = 0;
+      }
+      while(not q.empty())
+      {
+        const auto [r, c] = q.front();
+        q.pop();
+        if(dist[r][c] >= len_max)
+          continue;
+        for (int i = 0; i < 4; ++i)
+        {
+          const int nr = r + dr[i];
+          const int nc = c + dc[i];
+          if (nr < 0 or nr >= N or nc < 0 or nc >= N)
+            continue;
+          if(chmin(dist[nr][nc], dist[r][c] + 1))
+          {
+            back[nr][nc] = i;
+            q.emplace(nr, nc);
+          }
+          else if(dist[nr][nc] == dist[r][c] + 1 and vege_values[r][c] > 0)
+          {
+            back[nr][nc] = i;
+          }
+        }
+      }
+    }
 
+    void calc_destination(const int day)
+    {
+      destination = {-1, -1};
+      int max_vege_value = 0;
+      for (int r = 0; r < N; ++r)
+      {
+        for (int c = 0; c < N; ++c)
+        {
+          if(vege_values[r][c] > 0 and deadline[r][c] >= day + dist[r][c])
+          {
+            if(chmax(max_vege_value, vege_values[r][c]))
+              destination = {r, c};
+          }
+        }
+      }
+      for (int r = 0; r < N; ++r)
+      {
+        for (int c = 0; c < N; ++c)
+        {
+          if(vege_values[r][c] > 0 and deadline[r][c] >= day + dist[r][c])
+          {
+            if(max_vege_value * 0.9 <= vege_values[r][c] and deadline[r][c] - day - dist[r][c] <= 1)
+            {
+              destination = {r, c};
+            }
+          }
+        }
+      }
+    }
+    void construct_road()
+    {
+      int cr = destination.first, cc = destination.second;
+      while(dist[cr][cc] > 0)
+      {
+        road.emplace_back(cr, cc);
+        const int ddr = dr[back[cr][cc]];
+        const int ddc = dc[back[cr][cc]];
+        cr -= ddr;
+        cc -= ddc;
+      }
+    }
     Action select_next_action(int day)
     {
       if(untreated.empty())
@@ -177,68 +257,13 @@ struct Game {
       const bool ispurchace = (day < 850 and money >= next_price);
       if((machine_count + ispurchace) >= 2 and road.empty())
       {
-        std::queue<std::pair<int, int>> q;
-        dist.assign(N, std::vector<int>(N, inf));
-        back.assign(N, std::vector<int>(N, -1));
-        pos.clear();
-        for (int i = 0; i < N; ++i)
-        {
-          for (int j = 0; j < N; ++j)
-          {
-            if(has_machine[i][j])
-            {
-              pos.emplace_back(i, j);
-              dist[i][j] = 0;
-              q.emplace(i, j);
-            }
-          }
-        }
-        int max = 0;
-        int d_min = inf;
-        const int len_max = 6;
-        while(not q.empty())
-        {
-          const auto [r, c] = q.front();
-          q.pop();
-          if(vege_values[r][c] > 0 and deadline[r][c] >= day + dist[r][c])
-          {
-            if(chmax(max, vege_values[r][c]))
-            {
-              destination = {r, c};
-              d_min = dist[r][c];
-            }
-            else if(max == vege_values[r][c] and chmin(d_min, dist[r][c]))
-            {
-              destination = {r, c};
-            }
-          }
-          if(dist[r][c] >= len_max)
-            continue;
-          for (int i = 0; i < 4; ++i)
-          {
-            const int nr = r + dr[i];
-            const int nc = c + dc[i];
-            if(nr < 0 or nr >= N or nc < 0 or nc >= N)
-              continue;
-            if(chmin(dist[nr][nc], dist[r][c] + 1))
-            {
-              back[nr][nc] = i;
-              q.emplace(nr, nc);
-            }
-          }
-        }
+        const int len_max = 4;
+        bfs(len_max);
+        calc_destination(day);
         if(destination.first == -1)
           return Action::pass();
-        road.clear();
-        int cr = destination.first, cc = destination.second;
-        while(dist[cr][cc] > 0)
-        {
-          road.emplace_back(cr, cc);
-          const int ddr = dr[back[cr][cc]];
-          const int ddc = dc[back[cr][cc]];
-          cr -= ddr;
-          cc -= ddc;
-        }
+        construct_road();
+
       }
       if(ispurchace)
       {
@@ -287,7 +312,6 @@ struct Game {
           }
           else
           {
-            pos.emplace_back(road.back());
             const auto ret = Action::purchase(road.back().first, road.back().second);
             road.pop_back();
             return ret;
@@ -370,8 +394,6 @@ struct Game {
         const int idx = xor64() % (int)frc.size();
         const auto &[fr, fc] = frc[idx];
         const auto ret = Action::move(fr, fc, road.back().first, road.back().second);
-        pos.erase(std::find(pos.begin(), pos.end(), std::make_pair(fr, fc)));
-        pos.emplace_back(road.back());
         road.pop_back();
         return ret;
       }
