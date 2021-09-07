@@ -58,11 +58,24 @@ public:
         return Action({r1, c1, r2, c2});
     }
 };
-
+struct Destination
+{
+  int r, c;
+  double score;
+  Destination(int r, int c, double score) : r(r), c(c), score(score) {}
+  bool operator<(const Destination &d) const
+  {
+    return score < d.score;
+  }
+  bool operator>(const Destination &d) const
+  {
+    return score > d.score;
+  }
+};
 int N = 16, M, T;
 std::vector<std::vector<Vegetable>> veges_start; // veges_start[i] : vegetables appear on day i
 std::vector<std::vector<Vegetable>> veges_end;   // veges_end[i] : vegetables disappear on day i
-int machine_count = 0;
+
 
 struct Common
 {
@@ -73,8 +86,11 @@ struct Common
   std::pair<int, int> destination;
   std::vector<std::pair<int, int>> not_articulation;
   std::queue<std::pair<int, int>> q;
+  std::priority_queue<Destination, std::vector<Destination>, std::greater<>> destination_pq;
+  int beam_width;
   Common ()
   {
+    beam_width = 7;
     dist.assign(N, std::vector<int>(N));
     ord.assign(N, std::vector<int>(N, inf));
     low.assign(N, std::vector<int>(N, inf));
@@ -88,6 +104,7 @@ struct KKT89
   std::array<std::array<bool, 16>, 16> has_machine;
   std::array<std::array<int, 16>, 16> vege_values, deadline;
   std::vector<std::pair<int, int>> pos;
+  std::vector<Action> actions;
   int num_machine;
   int next_price;
   int money;
@@ -187,7 +204,7 @@ struct Game
         }
     }
 
-    static void bfs(const int len_max, KKT89 &state)
+    static void bfs(const int len_max, const KKT89 &state)
     {
       common.dist.assign(N, std::vector<int>(N, inf));
       common.back.assign(N, std::vector<int>(N, -1));
@@ -221,30 +238,21 @@ struct Game
       }
     }
 
-    static void calc_destination(const int day, const int len, KKT89 &state)
+    static void calc_destination(const int day, const KKT89 &state)
     {
       common.destination = {-1, -1};
-      double max_vege_value = 0;
       for (int r = 0; r < N; ++r)
       {
         for (int c = 0; c < N; ++c)
         {
           if(state.vege_values[r][c] > 0 and state.deadline[r][c] >= day + common.dist[r][c] - 1)
           {
-            if(common.dist[r][c] > 0 and chmax(max_vege_value, (double)state.vege_values[r][c] / common.dist[r][c]))
-              common.destination = {r, c};
-          }
-        }
-      }
-      for (int i = day + 1; i < std::min(day + len, (int)veges_start.size()); ++i)
-      {
-        for (const auto &vege : veges_start[i])
-        {
-          const auto &[r, c] = std::pair(vege.r, vege.c);
-          if(vege.s >= day + common.dist[r][c] - 1 and vege.e <= day + common.dist[r][c] - 1)
-          {
-            if(common.dist[r][c] > 0 and chmax(max_vege_value, (double)vege.v / common.dist[r][c]))
-              common.destination = {r, c};
+            if(common.dist[r][c] > 0)
+            {
+              common.destination_pq.emplace(r, c, (double)state.vege_values[r][c] / common.dist[r][c]);
+              while ((int)common.destination_pq.size() > common.beam_width)
+                common.destination_pq.pop();
+            }
           }
         }
       }
@@ -318,22 +326,23 @@ struct Game
           itr = common.not_articulation.erase(itr);
       }
     }
-    static Action select_next_action(int day, KKT89 &state)
+
+    static void start_construct(int day, const KKT89 &state)
     {
       const bool ispurchace = (day < 840 and state.money >= state.next_price);
-      if((machine_count + ispurchace) >= 2 and common.road.empty())
+      if((state.num_machine + ispurchace) >= 2)
       {
         const int len_max = 6;
         bfs(len_max, state);
-        calc_destination(day, len_max, state);
-        if(common.destination.first == -1)
-          return Action::pass();
-        construct_road();
+        calc_destination(day, state);
       }
+    }
+    static Action select_next_action(int day, KKT89 &state)
+    {
+      const bool ispurchace = (day < 840 and state.money >= state.next_price);
       if(ispurchace)
       {
-        machine_count += 1;
-        if(machine_count == 1)
+        if(state.num_machine == 0)
         {
           int fi = 0, fj = 0;
           int max = 0;
@@ -363,7 +372,7 @@ struct Game
       }
       else
       {
-        if(machine_count == 1)
+        if(state.num_machine == 1)
         {
           int max = -1;
           int fr = -1, fc = -1;
@@ -402,7 +411,8 @@ struct Game
     }
 };
 
-int main() {
+int main()
+{
     std::cin >> N >> M >> T;
     veges_start.resize(T);
     veges_end.resize(T);
@@ -414,24 +424,59 @@ int main() {
         veges_start[s].push_back(vege);
         veges_end[e].push_back(vege);
     }
-    KKT89 state;
-    std::vector<Action> actions;
+    KKT89 state, n_state;
+    std::vector<std::priority_queue<KKT89, std::vector<KKT89>, std::greater<>>> beam(T + 1);
+    beam[0].emplace(state);
     for (int day = 0; day < T; day++)
     {
+      auto &pq = beam[day];
+      while(not pq.empty())
+      {
+        state = pq.top();
+        pq.pop();
         Game::appear(day, state);
-        Action action = Game::select_next_action(day, state);
-        actions.push_back(action);
-        Game::simulate(day, action, state);
-        while(not common.road.empty() and day < T)
+        Game::start_construct(day, state);
+        if(common.destination_pq.empty())
         {
-          day += 1;
-          Game::appear(day, state);
-          action = Game::select_next_action(day, state);
-          actions.emplace_back(action);
+          Action action = Game::select_next_action(day, state);
+          state.actions.emplace_back(action);
           Game::simulate(day, action, state);
+          beam[day + 1].emplace(state);
+          if((int)beam[day + 1].size() > common.beam_width)
+          {
+            beam[day + 1].pop();
+          }
         }
+        while(not common.destination_pq.empty())
+        {
+          common.destination.first = common.destination_pq.top().r;
+          common.destination.second = common.destination_pq.top().c;
+          common.destination_pq.pop();
+          Game::construct_road();
+          int cday = day;
+          n_state = state;
+          Action action = Game::select_next_action(cday, n_state);
+          n_state.actions.emplace_back(action); 
+          Game::simulate(cday, action, n_state);
+          while(not common.road.empty() and cday < T)
+          {
+            cday += 1;
+            Game::appear(cday, n_state);
+            action = Game::select_next_action(cday, n_state);
+            n_state.actions.emplace_back(action);
+            Game::simulate(cday, action, n_state);
+          }
+          beam[cday + 1].push(n_state);
+          if((int)beam[cday + 1].size() > common.beam_width)
+          {
+            beam[cday + 1].pop();
+          }
+        }
+      }
     }
-    for (const Action& action : actions)
+    while ((int)beam[T].size() > 1)
+      beam[T].pop();
+    for (const Action& action : beam[T].top().actions)
     {
         for (int i = 0; i < (int)action.vs.size(); i++) {
             std::cout << action.vs[i] << (i == (int)action.vs.size() - 1 ? "\n" : " ");
