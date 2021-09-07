@@ -134,17 +134,15 @@ struct Game {
         }
 
         // harvest
-        for (int i = 0; i < N; i++)
+        for (const auto &[r, c] : pos)
         {
-            for (int j = 0; j < N; j++)
-            {
-                if (has_machine[i][j] and vege_values[i][j] > 0)
-                {
-                    money += vege_values[i][j] * count_connected_machines(i, j);
-                    vege_values[i][j] = 0;
-                }
-            }
+          if(vege_values[r][c] > 0)
+          {
+            money += vege_values[r][c] * (int)pos.size();
+            vege_values[r][c] = 0;
+          }
         }
+        
         // disappear
         for (const Vegetable& vege : veges_end[day])
         {
