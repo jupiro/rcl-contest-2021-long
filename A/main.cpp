@@ -59,113 +59,130 @@ public:
     }
 };
 
-int N, M, T;
+int N = 16, M, T;
 std::vector<std::vector<Vegetable>> veges_start; // veges_start[i] : vegetables appear on day i
 std::vector<std::vector<Vegetable>> veges_end;   // veges_end[i] : vegetables disappear on day i
 int machine_count = 0;
+
+struct Common
+{
+  std::vector<std::vector<int>> dist;
+  std::vector<std::vector<int>> back;
+  std::vector<std::pair<int, int>> road;
+  std::vector<std::vector<int>> ord, low;
+  std::pair<int, int> destination;
+  std::vector<std::pair<int, int>> not_articulation;
+  std::queue<std::pair<int, int>> q;
+  Common ()
+  {
+    dist.assign(N, std::vector<int>(N));
+    ord.assign(N, std::vector<int>(N, inf));
+    low.assign(N, std::vector<int>(N, inf));
+    destination = {-1, -1};
+  }
+};
+Common common;
+
+struct KKT89
+{
+  std::array<std::array<bool, 16>, 16> has_machine;
+  std::array<std::array<int, 16>, 16> vege_values, deadline;
+  std::vector<std::pair<int, int>> pos;
+  int num_machine;
+  int next_price;
+  int money;
+  KKT89() : num_machine(0), next_price(1), money(1)
+  {
+    const int N = 16;
+    for (int i = 0; i < N; ++i)
+    {
+      for (int j = 0; j < N; ++j)
+      {
+        has_machine[i][j] = false;
+        vege_values[i][j] = deadline[i][j] = 0;
+      }
+    }
+  }
+};
+
+
 struct Game
 {
-    std::vector<std::vector<int>> has_machine;
-    std::vector<std::vector<int>> vege_values;
-    std::vector<std::vector<int>> deadline;
-    std::vector<std::vector<int>> dist;
-    std::vector<std::vector<int>> back;
-    std::vector<std::pair<int, int>> road;
-    std::vector<std::pair<int, int>> pos;
-    std::vector<std::vector<int>> ord, low;
-    std::pair<int, int> destination;
-    std::vector<std::pair<int, int>> not_articulation;
-    std::queue<std::pair<int, int>> q;
-    int num_machine;
-    int next_price;
-    int money;
-
-    Game() : num_machine(0), next_price(1), money(1)
+    void purchase(int r, int c, KKT89 &state)
     {
-        has_machine.assign(N, std::vector<int>(N, 0));
-        vege_values.assign(N, std::vector<int>(N, 0));
-        deadline.assign(N, std::vector<int>(N));
-        dist.assign(N, std::vector<int>(N));
-        ord.assign(N, std::vector<int>(N, inf));
-        low.assign(N, std::vector<int>(N, inf));
-        destination = {-1, -1};
+        assert(!state.has_machine[r][c]);
+        assert(state.next_price <= state.money);
+        state.has_machine[r][c] = 1;
+        state.money -= state.next_price;
+        state.num_machine++;
+        state.next_price = (state.num_machine + 1) * (state.num_machine + 1) * (state.num_machine + 1);
+
+        state.pos.emplace_back(r, c);
     }
 
-    void purchase(int r, int c)
+    void move(int r1, int c1, int r2, int c2, KKT89 &state)
     {
-        assert(!has_machine[r][c]);
-        assert(next_price <= money);
-        has_machine[r][c] = 1;
-        money -= next_price;
-        num_machine++;
-        next_price = (num_machine + 1) * (num_machine + 1) * (num_machine + 1);
+        assert(state.has_machine[r1][c1]);
+        state.has_machine[r1][c1] = 0;
+        assert(!state.has_machine[r2][c2]);
+        state.has_machine[r2][c2] = 1;
 
-        pos.emplace_back(r, c);
-    }
-
-    void move(int r1, int c1, int r2, int c2)
-    {
-        assert(has_machine[r1][c1]);
-        has_machine[r1][c1] = 0;
-        assert(!has_machine[r2][c2]);
-        has_machine[r2][c2] = 1;
-
-        auto itr = std::find(pos.begin(), pos.end(), std::make_pair(r1, c1));
+        auto itr = std::find(state.pos.begin(), state.pos.end(), std::make_pair(r1, c1));
         *itr = {r2, c2};
     }
 
-    void appear(const int day)
+    void appear(const int day, KKT89 &state)
     {
       // appear
       for (const Vegetable& vege : veges_start[day])
       {
-          deadline[vege.r][vege.c] = vege.e;
-          vege_values[vege.r][vege.c] = vege.v;
+          state.deadline[vege.r][vege.c] = vege.e;
+          state.vege_values[vege.r][vege.c] = vege.v;
       }
     }
-    void simulate(int day, const Action& action)
+    void simulate(int day, const Action& action, KKT89 &state)
     {
         // apply
         if (action.vs.size() == 2)
         {
-            purchase(action.vs[0], action.vs[1]);
+            purchase(action.vs[0], action.vs[1], state);
         }
         else if (action.vs.size() == 4)
         {
-            move(action.vs[0], action.vs[1], action.vs[2], action.vs[3]);
+            move(action.vs[0], action.vs[1], action.vs[2], action.vs[3], state);
         }
 
         // harvest
-        for (const auto &[r, c] : pos)
+        for (const auto &[r, c] : state.pos)
         {
-          if(vege_values[r][c] > 0)
+          if(state.vege_values[r][c] > 0)
           {
-            money += vege_values[r][c] * (int)pos.size();
-            vege_values[r][c] = 0;
+            state.money += state.vege_values[r][c] * (int)state.pos.size();
+            state.vege_values[r][c] = 0;
           }
         }
 
         // disappear
         for (const Vegetable& vege : veges_end[day])
         {
-            vege_values[vege.r][vege.c] = 0;
+            state.vege_values[vege.r][vege.c] = 0;
         }
     }
 
-    void bfs(const int len_max)
+    void bfs(const int len_max, KKT89 &state)
     {
-      dist.assign(N, std::vector<int>(N, inf));
-      back.assign(N, std::vector<int>(N, -1));
-      for (const auto &[r, c] : pos)
+      common.dist.assign(N, std::vector<int>(N, inf));
+      common.back.assign(N, std::vector<int>(N, -1));
+      for (const auto &[r, c] : state.pos)
       {
-        q.emplace(r, c);
-        dist[r][c] = 0;
+        common.q.emplace(r, c);
+        common.dist[r][c] = 0;
       }
-      while(not q.empty())
+      while(not common.q.empty())
       {
-        const auto [r, c] = q.front();
-        q.pop();
-        if(dist[r][c] >= len_max)
+        const auto [r, c] = common.q.front();
+        common.q.pop();
+        if(common.dist[r][c] >= len_max)
           continue;
         for (int i = 0; i < 4; ++i)
         {
@@ -173,31 +190,31 @@ struct Game
           const int nc = c + dc[i];
           if (nr < 0 or nr >= N or nc < 0 or nc >= N)
             continue;
-          if(chmin(dist[nr][nc], dist[r][c] + 1))
+          if(chmin(common.dist[nr][nc], common.dist[r][c] + 1))
           {
-            back[nr][nc] = i;
-            q.emplace(nr, nc);
+            common.back[nr][nc] = i;
+            common.q.emplace(nr, nc);
           }
-          else if(dist[nr][nc] == dist[r][c] + 1 and vege_values[r][c] > 0)
+          else if(common.dist[nr][nc] == common.dist[r][c] + 1 and state.vege_values[r][c] > 0)
           {
-            back[nr][nc] = i;
+            common.back[nr][nc] = i;
           }
         }
       }
     }
 
-    void calc_destination(const int day, const int len)
+    void calc_destination(const int day, const int len, KKT89 &state)
     {
-      destination = {-1, -1};
+      common.destination = {-1, -1};
       double max_vege_value = 0;
       for (int r = 0; r < N; ++r)
       {
         for (int c = 0; c < N; ++c)
         {
-          if(vege_values[r][c] > 0 and deadline[r][c] >= day + dist[r][c] - 1)
+          if(state.vege_values[r][c] > 0 and state.deadline[r][c] >= day + common.dist[r][c] - 1)
           {
-            if(dist[r][c] > 0 and chmax(max_vege_value, (double)vege_values[r][c] / dist[r][c]))
-              destination = {r, c};
+            if(common.dist[r][c] > 0 and chmax(max_vege_value, (double)state.vege_values[r][c] / common.dist[r][c]))
+              common.destination = {r, c};
           }
         }
       }
@@ -206,34 +223,34 @@ struct Game
         for (const auto &vege : veges_start[i])
         {
           const auto &[r, c] = std::pair(vege.r, vege.c);
-          if(vege.s >= day + dist[r][c] - 1 and vege.e <= day + dist[r][c] - 1)
+          if(vege.s >= day + common.dist[r][c] - 1 and vege.e <= day + common.dist[r][c] - 1)
           {
-            if(dist[r][c] > 0 and chmax(max_vege_value, (double)vege.v / dist[r][c]))
-              destination = {r, c};
+            if(common.dist[r][c] > 0 and chmax(max_vege_value, (double)vege.v / common.dist[r][c]))
+              common.destination = {r, c};
           }
         }
       }
     }
     void construct_road()
     {
-      int cr = destination.first, cc = destination.second;
-      while(dist[cr][cc] > 0)
+      int cr = common.destination.first, cc = common.destination.second;
+      while(common.dist[cr][cc] > 0)
       {
-        road.emplace_back(cr, cc);
-        const int ddr = dr[back[cr][cc]];
-        const int ddc = dc[back[cr][cc]];
+        common.road.emplace_back(cr, cc);
+        const int ddr = dr[common.back[cr][cc]];
+        const int ddc = dc[common.back[cr][cc]];
         cr -= ddr;
         cc -= ddc;
       }
     }
 
-    void search_not_articulation(const int fr, const int fc, std::vector<std::pair<int, int>> &pos, std::vector<std::pair<int, int>> &not_articulation)
+    void search_not_articulation(const int fr, const int fc, KKT89 &state)
     {
-      not_articulation.clear();
+      common.not_articulation.clear();
       int idx = 0;
       auto dfs = [&](auto &&self, int r, int c, int pr, int pc)->void
       {
-        ord[r][c] = low[r][c] = idx;
+        common.ord[r][c] = common.low[r][c] = idx;
         idx += 1;
         bool is_articulation = false;
         for (int i = 0; i < 4; ++i)
@@ -244,54 +261,54 @@ struct Game
             continue;
           if(nr == pr and nc == pc)
             continue;
-          if(not (has_machine[nr][nc] or (nr == fr and nc == fc)))
+          if(not (state.has_machine[nr][nc] or (nr == fr and nc == fc)))
             continue;
-          if(ord[nr][nc] == inf)
+          if(common.ord[nr][nc] == inf)
           {
             self(self, nr, nc, r, c);
-            if(pr >= 0 and low[nr][nc] >= ord[r][c])
+            if(pr >= 0 and common.low[nr][nc] >= common.ord[r][c])
             {
               is_articulation = true;
             }
-            chmin(low[r][c], low[nr][nc]);
+            chmin(common.low[r][c], common.low[nr][nc]);
           }
           else
           {
-            chmin(low[r][c], ord[nr][nc]);
+            chmin(common.low[r][c], common.ord[nr][nc]);
           }
         }
         if((not is_articulation) and pr >= 0)
-          not_articulation.emplace_back(r, c);
+          common.not_articulation.emplace_back(r, c);
       };
       dfs(dfs, fr, fc, -1, -1);
-      ord[fr][fc] = low[fr][fc] = inf;
-      for (const auto &[r, c] : pos)
+      common.ord[fr][fc] = common.low[fr][fc] = inf;
+      for (const auto &[r, c] : state.pos)
       {
-        ord[r][c] = low[r][c] = inf;
+        common.ord[r][c] = common.low[r][c] = inf;
       }
       int min_vege_values = inf;
-      for (const auto &[r, c] : not_articulation)
+      for (const auto &[r, c] : common.not_articulation)
       {
-        chmin(min_vege_values, vege_values[r][c]);
+        chmin(min_vege_values, state.vege_values[r][c]);
       }
-      for (auto itr = not_articulation.begin(); itr != not_articulation.end();)
+      for (auto itr = common.not_articulation.begin(); itr != common.not_articulation.end();)
       {
         const auto &[r, c] = *itr;
-        if(min_vege_values == vege_values[r][c])
+        if(min_vege_values == state.vege_values[r][c])
           itr++;
         else
-          itr = not_articulation.erase(itr);
+          itr = common.not_articulation.erase(itr);
       }
     }
-    Action select_next_action(int day)
+    Action select_next_action(int day, KKT89 &state)
     {
-      const bool ispurchace = (day < 840 and money >= next_price);
-      if((machine_count + ispurchace) >= 2 and road.empty())
+      const bool ispurchace = (day < 840 and state.money >= state.next_price);
+      if((machine_count + ispurchace) >= 2 and common.road.empty())
       {
         const int len_max = 6;
-        bfs(len_max);
-        calc_destination(day, len_max);
-        if(destination.first == -1)
+        bfs(len_max, state);
+        calc_destination(day, len_max, state);
+        if(common.destination.first == -1)
           return Action::pass();
         construct_road();
       }
@@ -306,7 +323,7 @@ struct Game
           {
             for (int j = 0; j < N; ++j)
             {
-              if(chmax(max, vege_values[i][j]))
+              if(chmax(max, state.vege_values[i][j]))
                 fi = i, fj = j;
             }
           }
@@ -314,14 +331,14 @@ struct Game
         }
         else
         {
-          if(road.empty())
+          if(common.road.empty())
           {
             return Action::pass();
           }
           else
           {
-            const auto ret = Action::purchase(road.back().first, road.back().second);
-            road.pop_back();
+            const auto ret = Action::purchase(common.road.back().first, common.road.back().second);
+            common.road.pop_back();
             return ret;
           }
         }
@@ -337,11 +354,11 @@ struct Game
           {
             for (int j = 0; j < N; ++j)
             {
-              if(has_machine[i][j])
+              if(state.has_machine[i][j])
               {
                 sr = i, sc = j;
               }
-              if(chmax(max, vege_values[i][j]))
+              if(chmax(max, state.vege_values[i][j]))
               {
                 fr = i, fc = j;
               }
@@ -349,19 +366,19 @@ struct Game
           }
           return Action::move(sr, sc, fr, fc);
         }
-        if(road.empty())
+        if(common.road.empty())
         {
           return Action::pass();
         }
-        search_not_articulation(road.back().first, road.back().second, pos, not_articulation);
-        if(not_articulation.empty())
+        search_not_articulation(common.road.back().first, common.road.back().second, state);
+        if(common.not_articulation.empty())
         {
           return Action::pass();
         }
-        const int idx = xor64() % (int)not_articulation.size();
-        const auto &[fr, fc] = not_articulation[idx];
-        const auto ret = Action::move(fr, fc, road.back().first, road.back().second);
-        road.pop_back();
+        const int idx = xor64() % (int)common.not_articulation.size();
+        const auto &[fr, fc] = common.not_articulation[idx];
+        const auto ret = Action::move(fr, fc, common.road.back().first, common.road.back().second);
+        common.road.pop_back();
         return ret;
       }
     }
@@ -379,14 +396,15 @@ int main() {
         veges_start[s].push_back(vege);
         veges_end[e].push_back(vege);
     }
+    KKT89 state;
     Game game;
     std::vector<Action> actions;
     for (int day = 0; day < T; day++)
     {
-        game.appear(day);
-        Action action = game.select_next_action(day);
+        game.appear(day, state);
+        Action action = game.select_next_action(day, state);
         actions.push_back(action);
-        game.simulate(day, action);
+        game.simulate(day, action, state);
     }
     for (const Action& action : actions)
     {
