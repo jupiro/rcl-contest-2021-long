@@ -142,7 +142,7 @@ struct Game {
             vege_values[r][c] = 0;
           }
         }
-        
+
         // disappear
         for (const Vegetable& vege : veges_end[day])
         {
@@ -207,7 +207,7 @@ struct Game {
       }
     }
 
-    void calc_destination(const int day)
+    void calc_destination(const int day, const int len)
     {
       destination = {-1, -1};
       double max_vege_value = 0;
@@ -218,6 +218,18 @@ struct Game {
           if(vege_values[r][c] > 0 and deadline[r][c] >= day + dist[r][c] - 1)
           {
             if(dist[r][c] > 0 and chmax(max_vege_value, (double)vege_values[r][c] / dist[r][c]))
+              destination = {r, c};
+          }
+        }
+      }
+      for (int i = day + 1; i < std::min(day + len, (int)veges_start.size()); ++i)
+      {
+        for (const auto &vege : veges_start[i])
+        {
+          const auto &[r, c] = std::pair(vege.r, vege.c);
+          if(vege.s >= day + dist[r][c] - 1 and vege.e <= day + dist[r][c] - 1)
+          {
+            if(dist[r][c] > 0 and chmax(max_vege_value, (double)vege.v / dist[r][c]))
               destination = {r, c};
           }
         }
@@ -244,7 +256,7 @@ struct Game {
       {
         const int len_max = 6;
         bfs(len_max);
-        calc_destination(day);
+        calc_destination(day, len_max);
         if(destination.first == -1)
           return Action::pass();
         construct_road();
