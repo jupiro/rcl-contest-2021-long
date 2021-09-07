@@ -103,12 +103,30 @@ struct KKT89
       }
     }
   }
+  bool operator<(const KKT89 &kkt89) const
+  {
+    if(num_machine == kkt89.num_machine)
+    {
+      return money < kkt89.money;
+    }
+    else
+      return num_machine < kkt89.num_machine;
+  }
+  bool operator>(const KKT89 &kkt89) const
+  {
+    if(num_machine == kkt89.num_machine)
+    {
+      return money > kkt89.money;
+    }
+    else
+      return num_machine > kkt89.num_machine;
+  }
 };
 
 
 struct Game
 {
-    void purchase(int r, int c, KKT89 &state)
+    static void purchase(int r, int c, KKT89 &state)
     {
         assert(!state.has_machine[r][c]);
         assert(state.next_price <= state.money);
@@ -120,7 +138,7 @@ struct Game
         state.pos.emplace_back(r, c);
     }
 
-    void move(int r1, int c1, int r2, int c2, KKT89 &state)
+    static void move(int r1, int c1, int r2, int c2, KKT89 &state)
     {
         assert(state.has_machine[r1][c1]);
         state.has_machine[r1][c1] = 0;
@@ -131,7 +149,7 @@ struct Game
         *itr = {r2, c2};
     }
 
-    void appear(const int day, KKT89 &state)
+    static void appear(const int day, KKT89 &state)
     {
       // appear
       for (const Vegetable& vege : veges_start[day])
@@ -140,7 +158,7 @@ struct Game
           state.vege_values[vege.r][vege.c] = vege.v;
       }
     }
-    void simulate(int day, const Action& action, KKT89 &state)
+    static void simulate(int day, const Action& action, KKT89 &state)
     {
         // apply
         if (action.vs.size() == 2)
@@ -169,7 +187,7 @@ struct Game
         }
     }
 
-    void bfs(const int len_max, KKT89 &state)
+    static void bfs(const int len_max, KKT89 &state)
     {
       common.dist.assign(N, std::vector<int>(N, inf));
       common.back.assign(N, std::vector<int>(N, -1));
@@ -203,7 +221,7 @@ struct Game
       }
     }
 
-    void calc_destination(const int day, const int len, KKT89 &state)
+    static void calc_destination(const int day, const int len, KKT89 &state)
     {
       common.destination = {-1, -1};
       double max_vege_value = 0;
@@ -231,7 +249,7 @@ struct Game
         }
       }
     }
-    void construct_road()
+    static void construct_road()
     {
       int cr = common.destination.first, cc = common.destination.second;
       while(common.dist[cr][cc] > 0)
@@ -244,7 +262,7 @@ struct Game
       }
     }
 
-    void search_not_articulation(const int fr, const int fc, KKT89 &state)
+    static void search_not_articulation(const int fr, const int fc, KKT89 &state)
     {
       common.not_articulation.clear();
       int idx = 0;
@@ -300,7 +318,7 @@ struct Game
           itr = common.not_articulation.erase(itr);
       }
     }
-    Action select_next_action(int day, KKT89 &state)
+    static Action select_next_action(int day, KKT89 &state)
     {
       const bool ispurchace = (day < 840 and state.money >= state.next_price);
       if((machine_count + ispurchace) >= 2 and common.road.empty())
@@ -397,14 +415,21 @@ int main() {
         veges_end[e].push_back(vege);
     }
     KKT89 state;
-    Game game;
     std::vector<Action> actions;
     for (int day = 0; day < T; day++)
     {
-        game.appear(day, state);
-        Action action = game.select_next_action(day, state);
+        Game::appear(day, state);
+        Action action = Game::select_next_action(day, state);
         actions.push_back(action);
-        game.simulate(day, action, state);
+        Game::simulate(day, action, state);
+        while(not common.road.empty() and day < T)
+        {
+          day += 1;
+          Game::appear(day, state);
+          action = Game::select_next_action(day, state);
+          actions.emplace_back(action);
+          Game::simulate(day, action, state);
+        }
     }
     for (const Action& action : actions)
     {
