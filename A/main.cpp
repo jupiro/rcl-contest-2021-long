@@ -272,7 +272,6 @@ struct Game
     {
       common.destination = {-1, -1};
       const auto &deadline = common.deadline_table[day];
-      common.destination = {-1, -1};
       for (int r = 0; r < N; ++r)
       {
         for (int c = 0; c < N; ++c)
@@ -281,7 +280,22 @@ struct Game
           {
             if(common.dist[r][c] > 0)
             {
-              common.destination_pq.emplace(r, c, (double)state.vege_values[r][c] / common.dist[r][c]);
+              common.destination_pq.emplace(r, c, (double)state.vege_values[r][c]);
+              while ((int)common.destination_pq.size() > common.destination_width)
+                common.destination_pq.pop();
+            }
+          }
+        }
+      }
+      for (int i = day + 1; i < std::min((int)veges_start.size(), day + 7); ++i)
+      {
+        for (const auto &vege : veges_start[i])
+        {
+          if(common.dist[vege.r][vege.c] > 0)
+          {
+            if(vege.e >= day + common.dist[vege.r][vege.c] - 1 and vege.s <= day + common.dist[vege.r][vege.c] - 1)
+            {
+              common.destination_pq.emplace(vege.r, vege.c, vege.v);
               while ((int)common.destination_pq.size() > common.destination_width)
                 common.destination_pq.pop();
             }
@@ -374,7 +388,7 @@ struct Game
     }
     static Action select_next_action(int day, KKT89 &state)
     {
-      const bool ispurchace = (day < 840 and state.money >= state.next_price);
+      const bool ispurchace = (state.num_machine < 50 and state.money >= state.next_price);
       if(ispurchace)
       {
         if(state.num_machine == 0)
@@ -508,8 +522,8 @@ int main()
     beam[day].emplace(state);
     for (; day < T; day++)
     {
-      common.beam_width = 70;
-      common.destination_width = 3;
+      common.beam_width = 50;
+      common.destination_width = 5;
       auto &pq = beam[day];
       while(not pq.empty())
       {
@@ -551,7 +565,7 @@ int main()
             Game::simulate(cday, action, n_state);
           }
           Game::has_machine_out(n_state);
-          beam[cday + 1].push(n_state);
+          beam[cday + 1].emplace(n_state);
           if((int)beam[cday + 1].size() > common.beam_width)
           {
             beam[cday + 1].pop();
