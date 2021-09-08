@@ -164,6 +164,11 @@ struct KKT89
   }
 };
 
+int calc_score(const KKT89 &kkt89)
+{
+  const int kval = kkt89.num_machine * (kkt89.num_machine + 1) / 2;
+  return kval * kval + kkt89.money;
+}
 
 struct Game
 {
@@ -519,7 +524,7 @@ int main()
     std::vector<int> actions;
     std::vector<std::priority_queue<KKT89, std::vector<KKT89>, std::greater<>>> beam(T + 1);
     int day = 0;
-    while(day < 300)
+    while(day < 600)
     {
       common.beam_width = 1;
       common.destination_width = 1;
@@ -543,7 +548,7 @@ int main()
     beam[day].emplace(state);
     for (; day < T; day++)
     {
-      common.beam_width = 300;
+      common.beam_width = 100;
       common.destination_width = 5;
       auto &pq = beam[day];
       while(not pq.empty())
@@ -586,7 +591,10 @@ int main()
             Game::simulate(cday, action, n_state);
           }
           Game::has_machine_out(n_state);
-          beam[cday + 1].emplace(n_state);
+          if((int)beam[cday + 1].size() < common.beam_width or calc_score(beam[cday + 1].top()) > calc_score(n_state))
+          {
+            beam[cday + 1].emplace(n_state);
+          }
           if((int)beam[cday + 1].size() > common.beam_width)
           {
             beam[cday + 1].pop();
