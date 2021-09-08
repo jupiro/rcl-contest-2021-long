@@ -524,7 +524,7 @@ int main()
     std::vector<int> actions;
     std::vector<std::priority_queue<KKT89, std::vector<KKT89>, std::greater<>>> beam(T + 1);
     int day = 0;
-    while(day < 600)
+    while(day < 300)
     {
       common.beam_width = 1;
       common.destination_width = 1;
@@ -548,11 +548,20 @@ int main()
     beam[day].emplace(state);
     for (; day < T; day++)
     {
-      common.beam_width = 100;
-      common.destination_width = 5;
+      common.beam_width = 200;
+      if(day < 600)
+        common.beam_width = 100;
       auto &pq = beam[day];
       while(not pq.empty())
       {
+        if((int)pq.size() <= common.beam_width / 4)
+        {
+          common.destination_width = 4;
+        }
+        else
+        {
+          common.destination_width = 2;
+        }
         state = pq.top();
         pq.pop();
         Game::appear(day, state);
@@ -570,6 +579,7 @@ int main()
             beam[day + 1].pop();
           }
         }
+        n_state = state;
         while(not common.destination_pq.empty())
         {
           Game::has_machine_in(state);
@@ -579,6 +589,8 @@ int main()
           Game::construct_road();
           int cday = day;
           n_state = state;
+          while(n_state.actions.size() > state.actions.size())
+            n_state.actions.pop_back();
           int action = Game::select_next_action(n_state);
           n_state.actions.emplace_back(action); 
           Game::simulate(cday, action, n_state);
@@ -591,11 +603,10 @@ int main()
             Game::simulate(cday, action, n_state);
           }
           Game::has_machine_out(n_state);
-          if((int)beam[cday + 1].size() < common.beam_width or calc_score(beam[cday + 1].top()) > calc_score(n_state))
           {
             beam[cday + 1].emplace(n_state);
           }
-          if((int)beam[cday + 1].size() > common.beam_width)
+          while((int)beam[cday + 1].size() > common.beam_width)
           {
             beam[cday + 1].pop();
           }
