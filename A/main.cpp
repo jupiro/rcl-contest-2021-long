@@ -1,3 +1,6 @@
+
+#pragma GCC optimize("O3")
+#pragma GCC optimize("unroll-loops")
 #include <bits/stdc++.h>
 
 template<class T> inline bool chmax(T& a, T b) { if (a < b) { a = b; return 1; } return 0; }
@@ -5,7 +8,7 @@ template<class T> inline bool chmin(T& a, T b) { if (a > b) { a = b; return 1; }
 const int dr[] = {1, 0, -1, 0};
 const int dc[] = {0, 1, 0, -1};
 
-const int inf = (int)1e9 + 7;
+const int inf = (int)1000;
 using ll = long long;
 using std::cout;
 using std::endl;
@@ -91,7 +94,8 @@ struct Destination
     return score > d.score;
   }
 };
-int N = 16, M, T;
+int M, T;
+const int N = 16;
 std::vector<std::vector<Vegetable>> veges_start; // veges_start[i] : vegetables appear on day i
 std::vector<std::vector<Vegetable>> veges_end;   // veges_end[i] : vegetables disappear on day i
 
@@ -100,10 +104,8 @@ struct Common
 {
   std::array<std::array<bool, 16>, 16> has_machine;
   std::array<std::array<std::array<int, 16>, 16>, 1000> deadline_table;
-  std::vector<std::vector<int>> dist;
-  std::vector<std::vector<int>> back;
+  std::array<std::array<short, 16>, 16> dist, back, ord, low;
   std::vector<std::pair<int, int>> road;
-  std::vector<std::vector<int>> ord, low;
   std::pair<int, int> destination;
   std::vector<std::pair<int, int>> not_articulation;
   std::queue<std::pair<int, int>> q;
@@ -114,9 +116,13 @@ struct Common
   {
     beam_width = 7;
     destination_width = 3;
-    dist.assign(N, std::vector<int>(N));
-    ord.assign(N, std::vector<int>(N, inf));
-    low.assign(N, std::vector<int>(N, inf));
+    for (int i = 0; i < N; ++i)
+    {
+      for (int j = 0; j < N; ++j)
+      {
+        dist[i][j] = ord[i][j] = low[i][j] = inf;
+      }
+    }
     for (int i = 0; i < N; ++i)
     {
       for (int j = 0; j < N; ++j)
@@ -246,8 +252,13 @@ struct Game
 
     static void bfs(const int len_max, const KKT89 &state)
     {
-      common.dist.assign(N, std::vector<int>(N, inf));
-      common.back.assign(N, std::vector<int>(N, -1));
+      for (int i = 0; i < N; ++i)
+      {
+        for (int j = 0; j < N; ++j)
+        {
+          common.dist[i][j] = inf;
+        }
+      }
       for (const auto &[r, c] : state.pos)
       {
         common.q.emplace(r, c);
@@ -265,7 +276,7 @@ struct Game
           const int nc = c + dc[i];
           if (nr < 0 or nr >= N or nc < 0 or nc >= N)
             continue;
-          if(chmin(common.dist[nr][nc], common.dist[r][c] + 1))
+          if(chmin<short>(common.dist[nr][nc], common.dist[r][c] + 1))
           {
             common.back[nr][nc] = i;
             common.q.emplace(nr, nc);
@@ -293,6 +304,20 @@ struct Game
           }
         }
       }
+      for (int i = day + 1; i < std::min((int)veges_start.size(), day + 4); ++i)
+      {
+        for (const auto &vege : veges_start[i])
+        {
+          if(common.dist[vege.r][vege.c] > 0)
+          {
+            if(vege.e >= day + common.dist[vege.r][vege.c] - 1 and vege.s <= day + common.dist[vege.r][vege.c] - 1)
+            {
+              if(chmax(max_vege_value, (double)state.vege_values[vege.r][vege.c] / common.dist[vege.r][vege.c]))
+                common.destination = {vege.r, vege.c};
+            }
+          }
+        }
+      }
     }
     static void calc_destination_pq(const int day, const KKT89 &state)
     {
@@ -306,7 +331,8 @@ struct Game
           {
             if(common.dist[r][c] > 0)
             {
-              common.destination_pq.emplace(r, c, (double)state.vege_values[r][c]);
+              const double score = (double)state.vege_values[r][c];
+              common.destination_pq.emplace(r, c, score);
               while ((int)common.destination_pq.size() > common.destination_width)
                 common.destination_pq.pop();
             }
@@ -401,7 +427,7 @@ struct Game
 
     static void start_construct(int day, bool ispq, const KKT89 &state)
     {
-      const bool ispurchace = (day < 840 and state.money >= state.next_price);
+      const bool ispurchace = (state.num_machine < 50 and state.money >= state.next_price);
       if((state.num_machine + ispurchace) >= 2)
       {
         const int len_max = 6;
@@ -488,7 +514,8 @@ struct Game
 
 int main()
 {
-    std::cin >> N >> M >> T;
+    int _N;  
+    std::cin >> _N >> M >> T;
     veges_start.resize(T);
     veges_end.resize(T);
     for (int i = 0; i < M; i++)
@@ -550,7 +577,7 @@ int main()
     {
       common.beam_width = 200;
       if(day < 600)
-        common.beam_width = 100;
+        common.beam_width = 80;
       auto &pq = beam[day];
       while(not pq.empty())
       {
@@ -589,9 +616,9 @@ int main()
           Game::construct_road();
           int cday = day;
           n_state = state;
-          while(n_state.actions.size() > state.actions.size())
-            n_state.actions.pop_back();
           int action = Game::select_next_action(n_state);
+          const int sz = n_state.actions.size();
+          n_state.actions.reserve(sz + 1);
           n_state.actions.emplace_back(action); 
           Game::simulate(cday, action, n_state);
           while(not common.road.empty() and cday < T)
@@ -599,6 +626,8 @@ int main()
             cday += 1;
             Game::appear(cday, n_state);
             action = Game::select_next_action(n_state);
+            const int sz = n_state.actions.size();
+            n_state.actions.reserve(sz + 1);
             n_state.actions.emplace_back(action);
             Game::simulate(cday, action, n_state);
           }
