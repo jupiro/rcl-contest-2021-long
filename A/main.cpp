@@ -304,7 +304,7 @@ struct Game
           }
         }
       }
-      for (int i = day + 1; i < std::min((int)veges_start.size(), day + 4); ++i)
+      for (int i = day + 1; i < std::min((int)veges_start.size(), day + 6); ++i)
       {
         for (const auto &vege : veges_start[i])
         {
@@ -312,7 +312,7 @@ struct Game
           {
             if(vege.e >= day + common.dist[vege.r][vege.c] - 1 and vege.s <= day + common.dist[vege.r][vege.c] - 1)
             {
-              if(chmax(max_vege_value, (double)state.vege_values[vege.r][vege.c] / common.dist[vege.r][vege.c]))
+              if(chmax(max_vege_value, (double)vege.v / common.dist[vege.r][vege.c]))
                 common.destination = {vege.r, vege.c};
             }
           }
@@ -339,7 +339,7 @@ struct Game
           }
         }
       }
-      for (int i = day + 1; i < std::min((int)veges_start.size(), day + 7); ++i)
+      for (int i = day + 1; i < std::min((int)veges_start.size(), day + 6); ++i)
       {
         for (const auto &vege : veges_start[i])
         {
@@ -583,7 +583,7 @@ int main()
       {
         if((int)pq.size() <= common.beam_width / 4)
         {
-          common.destination_width = 4;
+          common.destination_width = 5;
         }
         else
         {
