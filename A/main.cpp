@@ -94,8 +94,7 @@ struct Destination
     return score > d.score;
   }
 };
-int M, T;
-const int N = 16;
+const int N = 16, M = 5000, T = 1000;
 std::vector<std::vector<Vegetable>> veges_start; // veges_start[i] : vegetables appear on day i
 std::vector<std::vector<Vegetable>> veges_end;   // veges_end[i] : vegetables disappear on day i
 
@@ -514,8 +513,8 @@ struct Game
 
 int main()
 {
-    int _N;  
-    std::cin >> _N >> M >> T;
+    int _N, _M, _T;  
+    std::cin >> _N >> _M >> _T;
     veges_start.resize(T);
     veges_end.resize(T);
     for (int i = 0; i < M; i++)
