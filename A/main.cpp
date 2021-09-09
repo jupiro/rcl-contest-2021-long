@@ -551,33 +551,14 @@ int main()
     std::vector<int> actions;
     std::vector<std::priority_queue<KKT89, std::vector<KKT89>, std::greater<>>> beam(T + 1);
     int day = 0;
-    while(day < 300)
-    {
-      common.beam_width = 1;
-      common.destination_width = 1;
-      Game::appear(day, state);
-      Game::start_construct(day, false, state);
-      if(common.destination.first >= 0)
-        Game::construct_road();
-      int action = Game::select_next_action(state);
-      actions.emplace_back(action);
-      Game::simulate(day, action, state);
-      while(not common.road.empty() and day < T)
-      {
-        day += 1;
-        Game::appear(day, state);
-        action = Game::select_next_action(state);
-        actions.emplace_back(action);
-        Game::simulate(day, action, state);
-      }
-      day += 1;
-    }
     beam[day].emplace(state);
     for (; day < T; day++)
     {
       common.beam_width = 200;
       if(day < 600)
         common.beam_width = 80;
+      if(day < 300)
+        common.beam_width = 10;
       auto &pq = beam[day];
       while(not pq.empty())
       {
