@@ -137,7 +137,7 @@ Common common;
 
 struct KKT89
 {
-  
+
   std::array<std::array<int, 16>, 16> vege_values;
   std::vector<std::pair<int, int>> pos;
   std::vector<int> actions;
@@ -237,7 +237,7 @@ struct Game
         {
           if(state.vege_values[r][c] > 0)
           {
-            state.money += state.vege_values[r][c] * (int)state.pos.size();
+            state.money += state.vege_values[r][c] * (int)state.num_machine;
             state.vege_values[r][c] = 0;
           }
         }
