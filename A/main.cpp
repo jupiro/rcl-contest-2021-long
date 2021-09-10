@@ -218,27 +218,6 @@ struct Game
           state.vege_values[vege.r][vege.c] = vege.v;
       }
     }
-    static int count_connected_machines(int r, int c)
-        {
-            std::vector<std::pair<int, int>> queue = {{r, c}};
-            std::vector<std::vector<int>> visited(N, std::vector<int>(N, 0));
-            visited[r][c] = 1;
-            int i = 0;
-            while (i < queue.size()) {
-                int cr = queue[i].first;
-                int cc = queue[i].second;
-                for (int dir = 0; dir < 4; dir++) {
-                    int nr = cr + dr[dir];
-                    int nc = cc + dc[dir];
-                    if (0 <= nr && nr < N && 0 <= nc && nc < N && common.has_machine[nr][nc] && !visited[nr][nc]) {
-                        visited[nr][nc] = 1;
-                        queue.push_back({nr, nc});
-                    }
-                }
-                i++;
-            }
-            return i;
-        }
     static void simulate(int day, const int action, KKT89 &state)
     {
         // apply
@@ -258,7 +237,7 @@ struct Game
         {
           if(state.vege_values[r][c] > 0)
           {
-            state.money += state.vege_values[r][c] * count_connected_machines(r, c);
+            state.money += state.vege_values[r][c] * state.num_machine;
             state.vege_values[r][c] = 0;
           }
         }
@@ -387,8 +366,63 @@ struct Game
         cc -= ddc;
       }
     }
-
     static void search_not_articulation(const int fr, const int fc, KKT89 &state)
+        {
+          common.not_articulation.clear();
+          int idx = 0;
+          auto dfs = [&](auto &&self, int r, int c, int pr, int pc)->void
+          {
+            common.ord[r][c] = common.low[r][c] = idx;
+            idx += 1;
+            bool is_articulation = false;
+            for (int i = 0; i < 4; ++i)
+            {
+              const int nr = r + dr[i];
+              const int nc = c + dc[i];
+              if(nr < 0 or nr >= N or nc < 0 or nc >= N)
+                continue;
+              if(nr == pr and nc == pc)
+                continue;
+              if(not (common.has_machine[nr][nc] or (nr == fr and nc == fc)))
+                continue;
+              if(common.ord[nr][nc] == inf)
+              {
+                self(self, nr, nc, r, c);
+                if(pr >= 0 and common.low[nr][nc] >= common.ord[r][c])
+                {
+                  is_articulation = true;
+                }
+                chmin(common.low[r][c], common.low[nr][nc]);
+              }
+              else
+              {
+                chmin(common.low[r][c], common.ord[nr][nc]);
+              }
+            }
+            if((not is_articulation) and pr >= 0)
+              common.not_articulation.emplace_back(r, c);
+          };
+          dfs(dfs, fr, fc, -1, -1);
+          common.ord[fr][fc] = common.low[fr][fc] = inf;
+          for (const auto &[r, c] : state.pos)
+          {
+            common.ord[r][c] = common.low[r][c] = inf;
+          }
+          int min_vege_values = inf;
+          for (const auto &[r, c] : common.not_articulation)
+          {
+            chmin(min_vege_values, state.vege_values[r][c]);
+          }
+          for (auto itr = common.not_articulation.begin(); itr != common.not_articulation.end();)
+          {
+            const auto &[r, c] = *itr;
+            if(min_vege_values == state.vege_values[r][c])
+              itr++;
+            else
+              itr = common.not_articulation.erase(itr);
+          }
+        }
+    static void search_not_articulation_early(const int fr, const int fc, KKT89 &state)
     {
 
       common.not_articulation.clear();
@@ -481,28 +515,20 @@ struct Game
             {
               const int nr = r + dr[i];
               const int nc = c + dc[i];
+              if(nr == fr and nc == fc)
+                add = false;
               if(nr < 0 or nr >= N or nc < 0 or nc >= N)
                 continue;
               if(not common.has_machine[nr][nc])
                 continue;
               if(dist[nr][nc] > dist[r][c])
                 add = false;
-              if(nr == fr and nc == fc)
-                add = false;
+
             }
             if(add)
               common.not_articulation.emplace_back(r, c);
           }
         }
-        if((int)state.pos.size() == 2)
-        {
-          for (const auto &[r, c] : common.not_articulation)
-          {
-            std::cerr << "ar:"<<r<<" " <<c<<endl;
-          }
-          std::cerr <<sr<<" "<<sc<<" "<<" "<<dist[sr][sc]<<" "<<lr<<" "<<lc<<" "<<dist[lr][lc]<<" "<<fr<<" "<<fc<<endl;
-        }
-
       }
 
       int min_vege_values = inf;
@@ -533,7 +559,7 @@ struct Game
           calc_destination(day, state);
       }
     }
-    static int select_next_action(KKT89 &state)
+    static int select_next_action(const int day, KKT89 &state)
     {
       const bool ispurchace = (state.num_machine < 50 and state.money >= state.next_price);
       if(ispurchace)
@@ -593,7 +619,10 @@ struct Game
         {
           return Action::pass();
         }
-        search_not_articulation(common.road.back().first, common.road.back().second, state);
+        if(day < 600)
+          search_not_articulation_early(common.road.back().first, common.road.back().second, state);
+        else
+          search_not_articulation(common.road.back().first, common.road.back().second, state);
         if(common.not_articulation.empty())
         {
           return Action::pass();
@@ -672,7 +701,7 @@ int main()
         if(common.destination_pq.empty())
         {
           Game::has_machine_in(state);
-          int action = Game::select_next_action(state);
+          int action = Game::select_next_action(day, state);
           state.actions.emplace_back(action);
           Game::simulate(day, action, state);
           beam[day + 1].emplace(state);
@@ -692,7 +721,7 @@ int main()
           Game::construct_road();
           int cday = day;
           n_state = state;
-          int action = Game::select_next_action(n_state);
+          int action = Game::select_next_action(cday,n_state);
           const int sz = n_state.actions.size();
           n_state.actions.reserve(sz + 1);
           n_state.actions.emplace_back(action); 
@@ -701,7 +730,7 @@ int main()
           {
             cday += 1;
             Game::appear(cday, n_state);
-            action = Game::select_next_action(n_state);
+            action = Game::select_next_action(cday, n_state);
             const int sz = n_state.actions.size();
             n_state.actions.reserve(sz + 1);
             n_state.actions.emplace_back(action);
